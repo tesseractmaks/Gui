@@ -3,9 +3,9 @@ import asyncio
 import datetime
 import time
 import aiofiles
-
 from os import getenv
 from pathlib import Path
+from tkinter import messagebox, TclError
 
 import gui
 from config import sender_log, reader_log, OpenConnection
@@ -20,10 +20,18 @@ status_updates_queue = asyncio.Queue()
 messages_queue = asyncio.Queue()
 
 
-async def write_to_disk(data, file_path):
+class InvalidToken(Exception):
+    def __init__(self):
+        messagebox.showinfo("Invalid Token", "Your token is not valid. Please check it and try again.")
+
+
+async def write_to_disk(data, file_path=OUT_PATH):
     time_now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     async with aiofiles.open(file_path, mode="a") as f:
-        await f.write(f"[{time_now}] {data.decode()!r}\n")
+        if isinstance(data, bytes):
+            await f.write(f"[{time_now}] {data.decode()!r}\n")
+        else:
+            await f.write(f"[{time_now}] {data}\n")
 
 
 async def load_msg_history(filepath, queue: asyncio.Queue):
@@ -35,11 +43,15 @@ async def load_msg_history(filepath, queue: asyncio.Queue):
 async def send_msgs(host, port, queue: asyncio.Queue):
     token = await queue.get()
     nickname = await authorise(host, port, token)
-    messages_queue.put_nowait(f"Выполнена авторизация. Пользователь {nickname['nickname']}")
-
+    if not nickname:
+        raise InvalidToken
+    greeting = f"Выполнена авторизация. Пользователь {nickname['nickname']}"
+    messages_queue.put_nowait(greeting)
+    await write_to_disk(greeting)
     while True:
         message = await queue.get()
         messages_queue.put_nowait(message)
+        await write_to_disk(message)
 
         await submit_message(host, port, message)
 
