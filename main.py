@@ -1,8 +1,11 @@
 import argparse
 import asyncio
+import datetime
 import time
+import aiofiles
 
 from os import getenv
+from pathlib import Path
 
 import gui
 from config import sender_log, reader_log, OpenConnection
@@ -10,18 +13,33 @@ from config import sender_log, reader_log, OpenConnection
 
 HOST_CLIENT = str(getenv("HOST_CLIENT", "188.246.233.198"))
 PORT_CLIENT = int(getenv("PORT_CLIENT", 5000))
+OUT_PATH = (Path(__file__).parent / "chat.log").absolute()
 
 sending_queue = asyncio.Queue()
 status_updates_queue = asyncio.Queue()
 messages_queue = asyncio.Queue()
 
 
-async def read_msgs(messages_queue, host, port):
+async def write_to_disk(data, file_path):
+    time_now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    async with aiofiles.open(file_path, mode="a") as f:
+        await f.write(f"[{time_now}] {data.decode()!r}\n")
+
+
+async def load_msg_history(filepath, queue: asyncio.Queue):
+    async with aiofiles.open(filepath) as file:
+        contents = await file.read()
+        queue.put_nowait(contents.strip())
+
+
+async def read_msgs(messages_queue, out_path, host, port):
+    await load_msg_history(out_path, messages_queue)
     async with OpenConnection(host, port) as (reader, writer):
         try:
             while True:
                 data = await reader.readline()
                 messages_queue.put_nowait(data.decode())
+                await write_to_disk(data, out_path)
         except (ConnectionRefusedError, ConnectionResetError, ConnectionError) as exc:
             reader_log.error(exc)
             writer.close()
@@ -31,6 +49,14 @@ async def read_msgs(messages_queue, host, port):
 def argparser():
 
     parser = argparse.ArgumentParser(description="Chat client")
+
+    parser.add_argument(
+        "-ph",
+        "--path",
+        type=str,
+        default=OUT_PATH,
+        help="Set path to catalog use arguments: '--path'"
+    )
 
     parser.add_argument(
         "-ht",
@@ -58,7 +84,9 @@ async def main():
     parser = argparser()
     host = parser.host
     port = parser.port
-    tasks = [gui.draw(messages_queue, sending_queue, status_updates_queue), read_msgs(messages_queue, host, port)]
+    out_path = parser.path
+
+    tasks = [gui.draw(messages_queue, sending_queue, status_updates_queue), read_msgs(messages_queue, out_path, host, port)]
 
     await asyncio.gather(*tasks)
 
