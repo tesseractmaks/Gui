@@ -21,11 +21,11 @@ pip install -r requirements.txt
 3. You also can create `.env` file to save ENVIRONMENT variables and use it instead of CLI args.
 
 ```bash
-ACCOUNT_TOKEN=some_token  # you can get token within registration.
+TOKEN=some_token  # you can get token within registration.
 HOST=minechat.dvmn.org  # host of server.
 PORT_READ=5000  # port to read messages form server.
 PORT_WRITE=5050  # port to send messages to server.
-FILEPATH=chat.history  # path to file with a chat history.
+OUT_PATH=some path  # path to file with a chat history.
 ```
 ---
 ## How to start
@@ -53,5 +53,9 @@ You'll see a graphical interface of a chat after you run script.
 * `--path` file path to save chat history.
 
 ```bash
-python main.py --host minechat.prod.org --token token_uuid
+python main.py --host minechat.prod.org --token token_hash
 ```
+
+## Author
+
+**tesseractmaks**  - [GitHub-tesseractmaks](https://github.com/tesseractmaks/Gui)
