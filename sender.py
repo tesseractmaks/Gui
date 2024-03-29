@@ -3,6 +3,7 @@ import asyncio
 import json
 
 from config import sender_log, OpenConnection
+import gui
 from os import getenv
 
 
@@ -35,8 +36,11 @@ async def register(host, port, parser):
         await writer.drain()
 
 
-async def authorise(host, port, token):
+async def authorise(host, port, token, status_updates_queue):
+    status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
+
     async with OpenConnection(host, port) as (reader, writer):
+        status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
         data = await reader.readline()
         sender_log.debug(f"{data.decode()!r}")
 
@@ -103,16 +107,16 @@ def argparser():
     return parser.parse_args()
 
 
-async def main():
-    parser = argparser()
-    host = parser.host
-    port = parser.port
-
-    if parser.reg:
-        await register(host, port, parser)
-
-    if parser.token:
-        await authorise(host, port, parser)
+# async def main():
+#     parser = argparser()
+#     host = parser.host
+#     port = parser.port
+#
+#     if parser.reg:
+#         await register(host, port, parser)
+#
+#     if parser.token:
+#         await authorise(host, port, parser)
 
 
 # if __name__ == "__main__":

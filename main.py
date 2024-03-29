@@ -42,10 +42,12 @@ async def load_msg_history(filepath, queue: asyncio.Queue):
 
 async def send_msgs(host, port, queue: asyncio.Queue):
     token = await queue.get()
-    nickname = await authorise(host, port, token)
+    nickname = await authorise(host, port, token, status_updates_queue)
     if not nickname:
         raise InvalidToken
+    event = gui.NicknameReceived(nickname["nickname"])
     greeting = f"Выполнена авторизация. Пользователь {nickname['nickname']}"
+    status_updates_queue.put_nowait(event)
     messages_queue.put_nowait(greeting)
     await write_to_disk(greeting)
     while True:
@@ -58,7 +60,9 @@ async def send_msgs(host, port, queue: asyncio.Queue):
 
 async def read_msgs(messages_queue, out_path, host, port):
     await load_msg_history(out_path, messages_queue)
+    status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
     async with OpenConnection(host, port) as (reader, writer):
+        status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
         try:
             while True:
                 data = await reader.readline()
