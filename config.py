@@ -16,7 +16,6 @@ watchdog_logger.setLevel(logging.DEBUG)
 watchdog_logger.addHandler(watchdog_handler)
 
 
-
 class OpenConnection:
     def __init__(self, host, port):
         self.host = host

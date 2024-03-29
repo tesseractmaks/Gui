@@ -1,9 +1,10 @@
 import argparse
 import asyncio
 import datetime
-import time
 import aiofiles
+import socket
 from async_timeout import timeout
+from anyio import create_task_group, run
 from os import getenv
 from pathlib import Path
 from tkinter import messagebox, TclError
@@ -15,7 +16,10 @@ from sender import authorise, submit_message, register
 HOST_CLIENT = str(getenv("HOST_CLIENT", "188.246.233.198"))
 PORT_CLIENT = int(getenv("PORT_CLIENT", 5000))
 OUT_PATH = (Path(__file__).parent / "chat.log").absolute()
+READ_TIMEOUT = 5
+PING_TIMEOUT = 2
 TIMEOUT_CONNECTION = 5
+
 
 sending_queue = asyncio.Queue()
 status_updates_queue = asyncio.Queue()
@@ -79,6 +83,12 @@ async def read_msgs(messages_queue, out_path, host, port):
             await writer.wait_closed()
 
 
+async def ping(queue: asyncio.Queue):
+    while True:
+        queue.put_nowait("")
+        await asyncio.sleep(PING_TIMEOUT)
+
+
 async def watch_for_connection(queue: asyncio.Queue):
     while True:
         try:
@@ -87,7 +97,7 @@ async def watch_for_connection(queue: asyncio.Queue):
                 watchdog_logger.debug(message)
         except asyncio.TimeoutError:
             if tm.expired:
-                watchdog_logger.warning(f"{TIMEOUT_CONNECTION}s timeout is expire")
+                watchdog_logger.warning(f"{TIMEOUT_CONNECTION}s timeout is elapsed")
                 raise ConnectionError
 
 
