@@ -82,11 +82,25 @@ async def read_msgs(messages_queue, out_path, host, port):
             writer.close()
             await writer.wait_closed()
 
-
 async def ping(queue: asyncio.Queue):
     while True:
         queue.put_nowait("")
         await asyncio.sleep(PING_TIMEOUT)
+
+async def handle_connection():
+    while True:
+        try:
+            async with create_task_group() as task_group:
+                task_group.start_soon(read_msgs, host, port_read, messages_queue)
+                task_group.start_soon(send_msgs, host, port_write, sending_queue)
+                task_group.start_soon(watch_for_connection, watchdog_queue)
+                task_group.start_soon(ping, sending_queue)
+        except* (ConnectionError, TimeoutError, socket.gaierror):
+            logger.debug("Reconnect")
+            status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
+            status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
+            status_updates_queue.put_nowait(gui.NicknameReceived("unknown"))
+            await asyncio.sleep(1)
 
 
 async def watch_for_connection(queue: asyncio.Queue):
