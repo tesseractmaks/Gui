@@ -175,12 +175,12 @@ async def main():
 if __name__ == "__main__":
     load_dotenv()
     parser = argparser()
-    out_path = OUT_PATH
     host = parser.host or str(os.getenv('HOST', 'minechat.dvmn.org'))
     port_read = parser.port_read or int(os.getenv('PORT_READ', 5000))
     port_write = parser.port_write or int(os.getenv('PORT_WRITE', 5050))
     token = parser.token or str(os.getenv("TOKEN"))
-    
+    out_path = parser.path or OUT_PATH
+
     try:
         asyncio.run(main())
     except InvalidToken:
