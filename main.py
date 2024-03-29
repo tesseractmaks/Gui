@@ -1,11 +1,13 @@
 import argparse
 import asyncio
 import datetime
+import os
+
 import aiofiles
 import socket
 from async_timeout import timeout
 from anyio import create_task_group, run
-from os import getenv
+from dotenv import load_dotenv
 from pathlib import Path
 from tkinter import messagebox, TclError
 
@@ -13,18 +15,18 @@ import gui
 from config import logger, watchdog_logger, OpenConnection
 from sender import authorise, submit_message, register
 
-HOST_CLIENT = str(getenv("HOST_CLIENT", "188.246.233.198"))
-PORT_CLIENT = int(getenv("PORT_CLIENT", 5000))
+
 OUT_PATH = (Path(__file__).parent / "chat.log").absolute()
 READ_TIMEOUT = 5
 PING_TIMEOUT = 2
-TIMEOUT_CONNECTION = 5
+TIMEOUT_CONNECTION = 20
 
-
+load_dotenv()
 sending_queue = asyncio.Queue()
 status_updates_queue = asyncio.Queue()
 messages_queue = asyncio.Queue()
 watchdog_queue = asyncio.Queue()
+saving_queue = asyncio.Queue()
 
 
 class InvalidToken(Exception):
@@ -41,13 +43,20 @@ async def write_to_disk(data, file_path=OUT_PATH):
             await f.write(f"[{time_now}] {data}\n")
 
 
+def add_timestamp(message: str | bytes, stamp_format: str = "[%d.%m.%Y %H:%M]") -> str:
+    if isinstance(message, bytes):
+        message = message.decode("utf-8")
+    timestamp = datetime.datetime.now().strftime(stamp_format)
+    return f'{timestamp} {message.strip()}'
+
+
 async def load_msg_history(filepath, queue: asyncio.Queue):
     async with aiofiles.open(filepath) as file:
         contents = await file.read()
         queue.put_nowait(contents.strip())
 
 
-async def send_msgs(host, port, queue: asyncio.Queue):
+async def send_msgs(host: str, port: int, queue: asyncio.Queue):
     token = await queue.get()
     nickname = await authorise(host, port, token, status_updates_queue)
     if not nickname:
@@ -66,36 +75,41 @@ async def send_msgs(host, port, queue: asyncio.Queue):
         await watchdog_queue.put("Message sent")
 
 
-async def read_msgs(messages_queue, out_path, host, port):
+async def read_msgs(host: str, port: int, messages_queue: asyncio.Queue):
     await load_msg_history(out_path, messages_queue)
     status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
     async with OpenConnection(host, port) as (reader, writer):
         status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
         try:
             while True:
-                data = await reader.readline()
+                data = await asyncio.wait_for(reader.readline(), READ_TIMEOUT)
                 messages_queue.put_nowait(data.decode())
                 await watchdog_queue.put("New message in chat")
+                stamped_phrase = add_timestamp(data)
+                messages_queue.put_nowait(stamped_phrase)
+                await saving_queue.put(stamped_phrase)
                 await write_to_disk(data, out_path)
         except (ConnectionRefusedError, ConnectionResetError, ConnectionError) as exc:
             logger.error(exc)
             writer.close()
             await writer.wait_closed()
 
+
 async def ping(queue: asyncio.Queue):
     while True:
         queue.put_nowait("")
         await asyncio.sleep(PING_TIMEOUT)
 
+
 async def handle_connection():
     while True:
         try:
             async with create_task_group() as task_group:
-                task_group.start_soon(read_msgs, host, port_read, messages_queue)
+                task_group.start_soon(read_msgs, host, port, messages_queue)
                 task_group.start_soon(send_msgs, host, port_write, sending_queue)
                 task_group.start_soon(watch_for_connection, watchdog_queue)
                 task_group.start_soon(ping, sending_queue)
-        except* (ConnectionError, TimeoutError, socket.gaierror):
+        except (ConnectionError, TimeoutError, socket.gaierror):
             logger.debug("Reconnect")
             status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
             status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
@@ -116,7 +130,6 @@ async def watch_for_connection(queue: asyncio.Queue):
 
 
 def argparser():
-
     parser = argparse.ArgumentParser(description="Chat client")
 
     parser.add_argument(
@@ -131,54 +144,56 @@ def argparser():
         "-ht",
         "--host",
         type=str,
-        default=str(getenv("CHAT_HOST", "minechat.dvmn.org")),
-        # default=str(getenv("HOST_CLIENT", "188.246.233.198")),
+        default=str(os.getenv("CHAT_HOST", "minechat.dvmn.org")),
         help="Enter host",
     )
     parser.add_argument(
-        "-p",
-        "--port",
+        "-pr",
+        "--port_read",
         type=int,
-        default=int(getenv("CHAT_PORT", 5050)),
-        # default=int(getenv("PORT_CLIENT", 5000)),
-        help="Enter port",
+        default=int(os.getenv("PORT_READ", 5000)),
+        help="Enter port read",
     )
-    parser.add_argument("-t", "--token", type=str, help="Enter hash token")
+    parser.add_argument(
+        "-pw",
+        "--port_write",
+        type=int,
+        default=int(os.getenv("PORT_WRITE", 5050)),
+        help="Enter port write",
+    )
+    parser.add_argument("-t", "--token", type=str, default=os.getenv("TOKEN"), help="Enter hash token")
     parser.add_argument("-r", "--reg", type=str, help="Enter nickname for registration")
-    parser.add_argument("msg", type=str, help="Enter message")
     return parser.parse_args()
 
 
 async def main():
-    parser = argparser()
-    host = parser.host
-    port = parser.port
-    out_path = parser.path
-    message = parser.msg
-    # print(message, "----")
-    # sending_queue.put_nowait(message)
+    # tasks = [
+    #     gui.draw(messages_queue, sending_queue, status_updates_queue),
+    #     read_msgs(messages_queue, out_path, host, port),
+    #     send_msgs(host, port, sending_queue),
+    #     watch_for_connection(watchdog_queue)
+    # ]
+    #
+    # await asyncio.gather(*tasks)
 
-    # if parser.reg:
-    #     await register(host, port, parser)
-    # if parser.token:
-    #     nickname = await authorise(host, port, parser)
-    #     messages_queue.put_nowait(f"Выполнена авторизация. Пользователь {nickname['nickname']}")
-    tasks = [
-        gui.draw(messages_queue, sending_queue, status_updates_queue),
-        read_msgs(messages_queue, out_path, host, port),
-        send_msgs(host, port, sending_queue),
-        watch_for_connection(watchdog_queue)
-    ]
-
-    await asyncio.gather(*tasks)
+    async with create_task_group() as task_group:
+        task_group.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
+        task_group.start_soon(load_msg_history, out_path, messages_queue)
+        task_group.start_soon(handle_connection)
 
 
 if __name__ == "__main__":
+    load_dotenv()
+    parser = argparser()
+    host = parser.host
+    port = parser.port_read
+    port_write = parser.port_write
+    out_path = parser.path
     try:
         asyncio.run(main())
     except InvalidToken:
         logger.debug('Incorrect token. Exit.')
-    except (KeyboardInterrupt, TclError, asyncio.exceptions.CancelledError):
+    except (KeyboardInterrupt, TclError, gui.TkAppClosed, asyncio.exceptions.CancelledError):
         logger.debug('The chat is closed. Exit.')
 
 

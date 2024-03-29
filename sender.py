@@ -2,38 +2,48 @@ import argparse
 import asyncio
 import json
 
+import aiofiles
+from dotenv import load_dotenv
 from config import logger, OpenConnection
 import gui
 from os import getenv
+
+
+load_dotenv()
 
 
 def encode_utf8(data):
     return data.encode("utf-8", "ignore")
 
 
-async def register(host, port, parser):
-    async with OpenConnection(host, port) as (reader, writer):
-        data = await reader.readline()
-        logger.debug(f"{data.decode()!r}-")
+def sanitize(string: str) -> str:
+    string = string.replace('\n', ' ')
+    string = string.replace('\t', '    ')
+    return string
 
-        writer.write("\n".encode())
-        await writer.drain()
 
-        data_2 = await reader.readline()
-        logger.debug(f"{data_2.decode()!r}--")
+async def register(username: str, host, port: int) -> dict | None:
+    reader, writer = await asyncio.open_connection(host, port)
 
-        writer.write(parser.reg.encode())
-        logger.debug(f"{parser.reg}")
-        await writer.drain()
+    await reader.readline()
+    writer.write(f'\n'.encode())
+    await writer.drain()
 
-        writer.write("\n".encode())
-        await writer.drain()
+    await reader.readline()
+    writer.write(f'{sanitize(username)}\n'.encode())
+    await writer.drain()
 
-        data_3 = await reader.readline()
-        logger.debug(f"{data_3.decode()!r}---")
+    response = await reader.readline()
+    credentials = json.loads(response.decode())
+    if not credentials:
+        logger.error("Server Error: can't get token")
+        return
 
-        writer.write("\n".encode())
-        await writer.drain()
+    async with aiofiles.open('credentials.json', 'w') as file:
+        await file.write(json.dumps(credentials))
+        logger.info("Username and token saved.")
+
+    return credentials
 
 
 async def authorise(host, port, token, status_updates_queue):
@@ -44,9 +54,7 @@ async def authorise(host, port, token, status_updates_queue):
         data = await reader.readline()
         logger.debug(f"{data.decode()!r}")
 
-        # writer.write(parser.token.encode())
         writer.write(token.encode())
-        # sender_log.debug(f"{parser.token} --")
         logger.debug(f"{token} --")
         await writer.drain()
 
