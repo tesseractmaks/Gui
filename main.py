@@ -6,14 +6,14 @@ import os
 import aiofiles
 import socket
 from async_timeout import timeout
-from anyio import create_task_group, run
+from anyio import create_task_group
 from dotenv import load_dotenv
 from pathlib import Path
 from tkinter import messagebox, TclError
 
 import gui
 from config import logger, watchdog_logger, OpenConnection
-from sender import authorise, submit_message, register
+from sender import authorise, submit_message
 
 
 OUT_PATH = (Path(__file__).parent / "chat.log").absolute()
@@ -57,7 +57,7 @@ async def load_msg_history(filepath, queue: asyncio.Queue):
 
 
 async def send_msgs(host: str, port: int, queue: asyncio.Queue):
-    token = await queue.get()
+
     nickname = await authorise(host, port, token, status_updates_queue)
     if not nickname:
         raise InvalidToken
@@ -105,7 +105,7 @@ async def handle_connection():
     while True:
         try:
             async with create_task_group() as task_group:
-                task_group.start_soon(read_msgs, host, port, messages_queue)
+                task_group.start_soon(read_msgs, host, port_read, messages_queue)
                 task_group.start_soon(send_msgs, host, port_write, sending_queue)
                 task_group.start_soon(watch_for_connection, watchdog_queue)
                 task_group.start_soon(ping, sending_queue)
@@ -162,20 +162,10 @@ def argparser():
         help="Enter port write",
     )
     parser.add_argument("-t", "--token", type=str, default=os.getenv("TOKEN"), help="Enter hash token")
-    parser.add_argument("-r", "--reg", type=str, help="Enter nickname for registration")
     return parser.parse_args()
 
 
 async def main():
-    # tasks = [
-    #     gui.draw(messages_queue, sending_queue, status_updates_queue),
-    #     read_msgs(messages_queue, out_path, host, port),
-    #     send_msgs(host, port, sending_queue),
-    #     watch_for_connection(watchdog_queue)
-    # ]
-    #
-    # await asyncio.gather(*tasks)
-
     async with create_task_group() as task_group:
         task_group.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
         task_group.start_soon(load_msg_history, out_path, messages_queue)
@@ -185,16 +175,15 @@ async def main():
 if __name__ == "__main__":
     load_dotenv()
     parser = argparser()
-    host = parser.host
-    port = parser.port_read
-    port_write = parser.port_write
-    out_path = parser.path
+    out_path = OUT_PATH
+    host = parser.host or str(os.getenv('HOST', 'minechat.dvmn.org'))
+    port_read = parser.port_read or int(os.getenv('PORT_READ', 5000))
+    port_write = parser.port_write or int(os.getenv('PORT_WRITE', 5050))
+    token = parser.token or str(os.getenv("TOKEN"))
+    
     try:
         asyncio.run(main())
     except InvalidToken:
         logger.debug('Incorrect token. Exit.')
     except (KeyboardInterrupt, TclError, gui.TkAppClosed, asyncio.exceptions.CancelledError):
         logger.debug('The chat is closed. Exit.')
-
-
-

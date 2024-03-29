@@ -51,44 +51,23 @@ async def authorise(host, port, token, status_updates_queue):
 
     async with OpenConnection(host, port) as (reader, writer):
         status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
-        data = await reader.readline()
-        logger.debug(f"{data.decode()!r}")
-
-        writer.write(token.encode())
-        logger.debug(f"{token} --")
+        text = await reader.readline()
+        logger.debug(text.decode())
+        writer.write(f"{sanitize(token)}\n".encode())
         await writer.drain()
-
-        writer.write("\n".encode())
-        await writer.drain()
-
-        nickname = await reader.readline()
-        if json.loads(nickname.decode()):
-            return json.loads(nickname)
-
-        data3 = await reader.readline()
-        logger.debug(f"{data3.decode()!r}")
-
-        # await submit_message(host, port, parser.msg)
+        logger.debug(f'Sent token_or_username {token}')
+        response = await reader.readline()
+        if json.loads(response):
+            return json.loads(response)
+        logger.error('The token is invalid. Check the token or register again.')
+        return False
 
 
 async def submit_message(host, port, message):
     async with OpenConnection(host, port) as (reader, writer):
-        # writer.write("\n".encode())
-        # await writer.drain()
-
-        # data = await reader.readline()
-        # writer.write(data)
-        # await writer.drain()
-        #
-        # writer.write("\n".encode())
-        # await writer.drain()
-
         writer.write(encode_utf8(f"{message.strip()}\n"))
         logger.debug(message)
         await writer.drain()
-
-        # writer.write("\n".encode())
-        # await writer.drain()
 
 
 def argparser():
@@ -111,21 +90,4 @@ def argparser():
     )
     parser.add_argument("-t", "--token", type=str, help="Enter hash token")
     parser.add_argument("-r", "--reg", type=str, help="Enter nickname for registration")
-    # parser.add_argument("msg", type=str, help="Enter message")
     return parser.parse_args()
-
-
-# async def main():
-#     parser = argparser()
-#     host = parser.host
-#     port = parser.port
-#
-#     if parser.reg:
-#         await register(host, port, parser)
-#
-#     if parser.token:
-#         await authorise(host, port, parser)
-
-
-# if __name__ == "__main__":
-#     asyncio.run(main())

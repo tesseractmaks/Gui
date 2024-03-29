@@ -44,7 +44,6 @@ async def update_tk(root_frame, interval=1 / 120):
         try:
             root_frame.update()
         except tk.TclError:
-            # if application has been destroyed/closed
             raise TkAppClosed()
         await asyncio.sleep(interval)
 
@@ -57,9 +56,6 @@ async def update_conversation_history(panel, messages_queue):
         if panel.index('end-1c') != '1.0':
             panel.insert('end', '\n')
         panel.insert('end', msg)
-        # TODO сделать промотку умной, чтобы не мешала просматривать историю сообщений
-        # ScrolledText.frame
-        # ScrolledText.vbar
         panel.yview(tk.END)
         panel['state'] = 'disabled'
 
@@ -132,5 +128,3 @@ async def draw(messages_queue, sending_queue, status_updates_queue):
         task_group.start_soon(update_tk, root_frame)
         task_group.start_soon(update_conversation_history, conversation_panel, messages_queue)
         task_group.start_soon(update_status_panel, status_labels, status_updates_queue)
-
-
