@@ -3,21 +3,24 @@ import asyncio
 import datetime
 import time
 import aiofiles
+from async_timeout import timeout
 from os import getenv
 from pathlib import Path
 from tkinter import messagebox, TclError
 
 import gui
-from config import sender_log, reader_log, OpenConnection
+from config import logger, watchdog_logger, OpenConnection
 from sender import authorise, submit_message, register
 
 HOST_CLIENT = str(getenv("HOST_CLIENT", "188.246.233.198"))
 PORT_CLIENT = int(getenv("PORT_CLIENT", 5000))
 OUT_PATH = (Path(__file__).parent / "chat.log").absolute()
+TIMEOUT_CONNECTION = 5
 
 sending_queue = asyncio.Queue()
 status_updates_queue = asyncio.Queue()
 messages_queue = asyncio.Queue()
+watchdog_queue = asyncio.Queue()
 
 
 class InvalidToken(Exception):
@@ -48,14 +51,15 @@ async def send_msgs(host, port, queue: asyncio.Queue):
     event = gui.NicknameReceived(nickname["nickname"])
     greeting = f"Выполнена авторизация. Пользователь {nickname['nickname']}"
     status_updates_queue.put_nowait(event)
+    await watchdog_queue.put("Authorization done")
     messages_queue.put_nowait(greeting)
     await write_to_disk(greeting)
     while True:
         message = await queue.get()
         messages_queue.put_nowait(message)
         await write_to_disk(message)
-
         await submit_message(host, port, message)
+        await watchdog_queue.put("Message sent")
 
 
 async def read_msgs(messages_queue, out_path, host, port):
@@ -67,11 +71,24 @@ async def read_msgs(messages_queue, out_path, host, port):
             while True:
                 data = await reader.readline()
                 messages_queue.put_nowait(data.decode())
+                await watchdog_queue.put("New message in chat")
                 await write_to_disk(data, out_path)
         except (ConnectionRefusedError, ConnectionResetError, ConnectionError) as exc:
-            reader_log.error(exc)
+            logger.error(exc)
             writer.close()
             await writer.wait_closed()
+
+
+async def watch_for_connection(queue: asyncio.Queue):
+    while True:
+        try:
+            async with timeout(TIMEOUT_CONNECTION) as tm:
+                message = await queue.get()
+                watchdog_logger.debug(message)
+        except asyncio.TimeoutError:
+            if tm.expired:
+                watchdog_logger.warning(f"{TIMEOUT_CONNECTION}s timeout is expire")
+                raise ConnectionError
 
 
 def argparser():
@@ -125,13 +142,20 @@ async def main():
     tasks = [
         gui.draw(messages_queue, sending_queue, status_updates_queue),
         read_msgs(messages_queue, out_path, host, port),
-        send_msgs(host, port, sending_queue)
+        send_msgs(host, port, sending_queue),
+        watch_for_connection(watchdog_queue)
     ]
 
     await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except InvalidToken:
+        logger.debug('Incorrect token. Exit.')
+    except (KeyboardInterrupt, TclError, asyncio.exceptions.CancelledError):
+        logger.debug('The chat is closed. Exit.')
+
 
 

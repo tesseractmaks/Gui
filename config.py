@@ -1,8 +1,20 @@
 import asyncio
 import logging
-logging.basicConfig(format='%(levelname)s:%(module)s:%(lineno)s:%(message)s', level=logging.DEBUG)
-sender_log = logging.getLogger("sender")
-reader_log = logging.getLogger("reader")
+
+logger = logging.getLogger("main")
+logger_handler = logging.StreamHandler()
+logger_fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger_handler.setFormatter(logger_fmt)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logger_handler)
+
+watchdog_logger = logging.getLogger(name="watchdog_logger")
+watchdog_handler = logging.StreamHandler()
+watchdog_logger_fmt = logging.Formatter(fmt='[%(created)d] Connection is alive. %(message)s')
+watchdog_handler.setFormatter(watchdog_logger_fmt)
+watchdog_logger.setLevel(logging.DEBUG)
+watchdog_logger.addHandler(watchdog_handler)
+
 
 
 class OpenConnection:

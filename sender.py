@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import json
 
-from config import sender_log, OpenConnection
+from config import logger, OpenConnection
 import gui
 from os import getenv
 
@@ -14,23 +14,23 @@ def encode_utf8(data):
 async def register(host, port, parser):
     async with OpenConnection(host, port) as (reader, writer):
         data = await reader.readline()
-        sender_log.debug(f"{data.decode()!r}-")
+        logger.debug(f"{data.decode()!r}-")
 
         writer.write("\n".encode())
         await writer.drain()
 
         data_2 = await reader.readline()
-        sender_log.debug(f"{data_2.decode()!r}--")
+        logger.debug(f"{data_2.decode()!r}--")
 
         writer.write(parser.reg.encode())
-        sender_log.debug(f"{parser.reg}")
+        logger.debug(f"{parser.reg}")
         await writer.drain()
 
         writer.write("\n".encode())
         await writer.drain()
 
         data_3 = await reader.readline()
-        sender_log.debug(f"{data_3.decode()!r}---")
+        logger.debug(f"{data_3.decode()!r}---")
 
         writer.write("\n".encode())
         await writer.drain()
@@ -42,12 +42,12 @@ async def authorise(host, port, token, status_updates_queue):
     async with OpenConnection(host, port) as (reader, writer):
         status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
         data = await reader.readline()
-        sender_log.debug(f"{data.decode()!r}")
+        logger.debug(f"{data.decode()!r}")
 
         # writer.write(parser.token.encode())
         writer.write(token.encode())
         # sender_log.debug(f"{parser.token} --")
-        sender_log.debug(f"{token} --")
+        logger.debug(f"{token} --")
         await writer.drain()
 
         writer.write("\n".encode())
@@ -58,7 +58,7 @@ async def authorise(host, port, token, status_updates_queue):
             return json.loads(nickname)
 
         data3 = await reader.readline()
-        sender_log.debug(f"{data3.decode()!r}")
+        logger.debug(f"{data3.decode()!r}")
 
         # await submit_message(host, port, parser.msg)
 
@@ -76,7 +76,7 @@ async def submit_message(host, port, message):
         # await writer.drain()
 
         writer.write(encode_utf8(f"{message.strip()}\n"))
-        sender_log.debug(message)
+        logger.debug(message)
         await writer.drain()
 
         # writer.write("\n".encode())
