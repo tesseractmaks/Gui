@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import aiofiles
 import datetime
+import gui
 import os
 import socket
 
@@ -11,7 +12,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 from tkinter import messagebox, TclError
 
-import gui
 from config import logger, watchdog_logger, OpenConnection
 from sender import authorise, submit_message
 

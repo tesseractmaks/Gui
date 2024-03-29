@@ -1,12 +1,12 @@
 import argparse
 import asyncio
 import aiofiles
+import gui
 import json
 
 from os import getenv
 from dotenv import load_dotenv
 from config import logger, OpenConnection
-import gui
 
 
 load_dotenv()
