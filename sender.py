@@ -1,12 +1,12 @@
 import argparse
 import asyncio
+import aiofiles
 import json
 
-import aiofiles
+from os import getenv
 from dotenv import load_dotenv
 from config import logger, OpenConnection
 import gui
-from os import getenv
 
 
 load_dotenv()
@@ -17,8 +17,8 @@ def encode_utf8(data):
 
 
 def sanitize(string: str) -> str:
-    string = string.replace('\n', ' ')
-    string = string.replace('\t', '    ')
+    string = string.replace("\n", " ")
+    string = string.replace("\t", "    ")
     return string
 
 
@@ -26,11 +26,11 @@ async def register(username: str, host, port: int) -> dict | None:
     reader, writer = await asyncio.open_connection(host, port)
 
     await reader.readline()
-    writer.write(f'\n'.encode())
+    writer.write(f"\n".encode())
     await writer.drain()
 
     await reader.readline()
-    writer.write(f'{sanitize(username)}\n'.encode())
+    writer.write(f"{sanitize(username)}\n".encode())
     await writer.drain()
 
     response = await reader.readline()
@@ -39,7 +39,7 @@ async def register(username: str, host, port: int) -> dict | None:
         logger.error("Server Error: can't get token")
         return
 
-    async with aiofiles.open('credentials.json', 'w') as file:
+    async with aiofiles.open("credentials.json", "w") as file:
         await file.write(json.dumps(credentials))
         logger.info("Username and token saved.")
 
@@ -55,11 +55,11 @@ async def authorise(host, port, token, status_updates_queue):
         logger.debug(text.decode())
         writer.write(f"{sanitize(token)}\n".encode())
         await writer.drain()
-        logger.debug(f'Sent token_or_username {token}')
+        logger.debug(f"Sent token_or_username {token}")
         response = await reader.readline()
         if json.loads(response):
             return json.loads(response)
-        logger.error('The token is invalid. Check the token or register again.')
+        logger.error("The token is invalid. Check the token or register again.")
         return False
 
 

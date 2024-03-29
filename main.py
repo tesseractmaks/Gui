@@ -1,10 +1,10 @@
 import argparse
 import asyncio
+import aiofiles
 import datetime
 import os
-
-import aiofiles
 import socket
+
 from async_timeout import timeout
 from anyio import create_task_group
 from dotenv import load_dotenv
@@ -31,7 +31,9 @@ saving_queue = asyncio.Queue()
 
 class InvalidToken(Exception):
     def __init__(self):
-        messagebox.showinfo("Invalid Token", "Your token is not valid. Please check it and try again.")
+        messagebox.showinfo(
+            "Invalid Token", "Your token is not valid. Please check it and try again."
+        )
 
 
 async def write_to_disk(data, file_path=OUT_PATH):
@@ -47,7 +49,7 @@ def add_timestamp(message: str | bytes, stamp_format: str = "[%d.%m.%Y %H:%M]") 
     if isinstance(message, bytes):
         message = message.decode("utf-8")
     timestamp = datetime.datetime.now().strftime(stamp_format)
-    return f'{timestamp} {message.strip()}'
+    return f"{timestamp} {message.strip()}"
 
 
 async def load_msg_history(filepath, queue: asyncio.Queue):
@@ -137,7 +139,7 @@ def argparser():
         "--path",
         type=str,
         default=OUT_PATH,
-        help="Set path to catalog use arguments: '--path'"
+        help="Set path to catalog use arguments: '--path'",
     )
 
     parser.add_argument(
@@ -161,13 +163,17 @@ def argparser():
         default=int(os.getenv("PORT_WRITE", 5050)),
         help="Enter port write",
     )
-    parser.add_argument("-t", "--token", type=str, default=os.getenv("TOKEN"), help="Enter hash token")
+    parser.add_argument(
+        "-t", "--token", type=str, default=os.getenv("TOKEN"), help="Enter hash token"
+    )
     return parser.parse_args()
 
 
 async def main():
     async with create_task_group() as task_group:
-        task_group.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
+        task_group.start_soon(
+            gui.draw, messages_queue, sending_queue, status_updates_queue
+        )
         task_group.start_soon(load_msg_history, out_path, messages_queue)
         task_group.start_soon(handle_connection)
 
@@ -175,15 +181,20 @@ async def main():
 if __name__ == "__main__":
     load_dotenv()
     parser = argparser()
-    host = parser.host or str(os.getenv('HOST', 'minechat.dvmn.org'))
-    port_read = parser.port_read or int(os.getenv('PORT_READ', 5000))
-    port_write = parser.port_write or int(os.getenv('PORT_WRITE', 5050))
+    host = parser.host or str(os.getenv("HOST", "minechat.dvmn.org"))
+    port_read = parser.port_read or int(os.getenv("PORT_READ", 5000))
+    port_write = parser.port_write or int(os.getenv("PORT_WRITE", 5050))
     token = parser.token or str(os.getenv("TOKEN"))
     out_path = parser.path or OUT_PATH
 
     try:
         asyncio.run(main())
     except InvalidToken:
-        logger.debug('Incorrect token. Exit.')
-    except (KeyboardInterrupt, TclError, gui.TkAppClosed, asyncio.exceptions.CancelledError):
-        logger.debug('The chat is closed. Exit.')
+        logger.debug("Incorrect token. Exit.")
+    except (
+        KeyboardInterrupt,
+        TclError,
+        gui.TkAppClosed,
+        asyncio.exceptions.CancelledError,
+    ):
+        logger.debug("The chat is closed. Exit.")

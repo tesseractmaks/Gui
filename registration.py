@@ -2,24 +2,25 @@ import asyncio
 import functools
 import os
 import tkinter
+
 from tkinter import messagebox, ttk
 from dotenv import load_dotenv
 from sender import register
 
 
 def click_register(entries, root):
-    nickname = entries['username'].get()
+    nickname = entries["username"].get()
     if not nickname:
-        messagebox.showerror('Error', "Username can't be blank")
+        messagebox.showerror("Error", "Username can't be blank")
         return
 
     asyncio.run(register(nickname, host, port))
-    messagebox.showinfo('Info', 'Credential saved to credentials.json')
+    messagebox.showinfo("Info", "Credential saved to credentials.json")
 
     root.quit()
 
 
-def set_entry(label_text, default=''):
+def set_entry(label_text, default=""):
     frame = ttk.Frame(borderwidth=0, relief=tkinter.SOLID, padding=[8, 10])
 
     label = ttk.Label(frame, text=label_text)
@@ -35,22 +36,22 @@ def set_entry(label_text, default=''):
 
 def main():
     root = tkinter.Tk()
-    root.title('Registration to the chat')
-    root.geometry('300x150+300+300')
+    root.title("Registration to the chat")
+    root.geometry("300x150+300+300")
 
-    entries = {'username': set_entry('Username:')}
+    entries = {"username": set_entry("Username:")}
 
     click_handler = functools.partial(
         click_register,
         entries=entries,
         root=root,
     )
-    btn = ttk.Button(text='Press to register', command=click_handler)
+    btn = ttk.Button(text="Press to register", command=click_handler)
     btn.pack(side=tkinter.BOTTOM, fill=tkinter.X)
     root.mainloop()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     load_dotenv()
     host = str(os.getenv("HOST"))
     port = str(os.getenv("PORT_WRITE"))
