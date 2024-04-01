@@ -58,7 +58,7 @@ async def load_msg_history(filepath, queue: asyncio.Queue):
         queue.put_nowait(contents.strip())
 
 
-async def send_msgs(host: str, port: int, queue: asyncio.Queue):
+async def send_msgs(host: str, port: int, queue: asyncio.Queue, token: str):
 
     nickname = await authorise(host, port, token, status_updates_queue)
     if not nickname:
@@ -77,7 +77,7 @@ async def send_msgs(host: str, port: int, queue: asyncio.Queue):
         await watchdog_queue.put("Message sent")
 
 
-async def read_msgs(host: str, port: int, messages_queue: asyncio.Queue):
+async def read_msgs(host: str, port: int, messages_queue: asyncio.Queue, out_path: str):
     await load_msg_history(out_path, messages_queue)
     status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
     async with OpenConnection(host, port) as (reader, writer):
@@ -103,12 +103,12 @@ async def ping(queue: asyncio.Queue):
         await asyncio.sleep(PING_TIMEOUT)
 
 
-async def handle_connection():
+async def handle_connection(parser, out_path: str, token: str, host: str, port_read: int, port_write: int):
     while True:
         try:
             async with create_task_group() as task_group:
-                task_group.start_soon(read_msgs, host, port_read, messages_queue)
-                task_group.start_soon(send_msgs, host, port_write, sending_queue)
+                task_group.start_soon(read_msgs, host, port_read, messages_queue, out_path)
+                task_group.start_soon(send_msgs, host, port_write, sending_queue, token)
                 task_group.start_soon(watch_for_connection, watchdog_queue)
                 task_group.start_soon(ping, sending_queue)
         except (ConnectionError, TimeoutError, socket.gaierror):
@@ -170,23 +170,22 @@ def argparser():
 
 
 async def main():
+    parser = argparser()
+    token = parser.token or str(os.getenv("TOKEN"))
+    host = parser.host or str(os.getenv("HOST", "minechat.dvmn.org"))
+    port_read = parser.port_read or int(os.getenv("PORT_READ", 5000))
+    port_write = parser.port_write or int(os.getenv("PORT_WRITE", 5050))
+    out_path = parser.path or OUT_PATH
     async with create_task_group() as task_group:
         task_group.start_soon(
             gui.draw, messages_queue, sending_queue, status_updates_queue
         )
         task_group.start_soon(load_msg_history, out_path, messages_queue)
-        task_group.start_soon(handle_connection)
+        task_group.start_soon(handle_connection, parser, out_path, token, host, port_read, port_write)
 
 
 if __name__ == "__main__":
     load_dotenv()
-    parser = argparser()
-    host = parser.host or str(os.getenv("HOST", "minechat.dvmn.org"))
-    port_read = parser.port_read or int(os.getenv("PORT_READ", 5000))
-    port_write = parser.port_write or int(os.getenv("PORT_WRITE", 5050))
-    token = parser.token or str(os.getenv("TOKEN"))
-    out_path = parser.path or OUT_PATH
-
     try:
         asyncio.run(main())
     except InvalidToken:

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from sender import register
 
 
-def click_register(entries, root):
+def click_register(entries, root, host, port):
     nickname = entries["username"].get()
     if not nickname:
         messagebox.showerror("Error", "Username can't be blank")
@@ -35,6 +35,8 @@ def set_entry(label_text, default=""):
 
 
 def main():
+    host = str(os.getenv("HOST"))
+    port = str(os.getenv("PORT_WRITE"))
     root = tkinter.Tk()
     root.title("Registration to the chat")
     root.geometry("300x150+300+300")
@@ -45,6 +47,8 @@ def main():
         click_register,
         entries=entries,
         root=root,
+        host=host,
+        port=port
     )
     btn = ttk.Button(text="Press to register", command=click_handler)
     btn.pack(side=tkinter.BOTTOM, fill=tkinter.X)
@@ -53,6 +57,4 @@ def main():
 
 if __name__ == "__main__":
     load_dotenv()
-    host = str(os.getenv("HOST"))
-    port = str(os.getenv("PORT_WRITE"))
     main()
